@@ -6,6 +6,8 @@ import math
 import torch
 from torchvision.transforms.v2 import functional as F
 from torchvision import utils
+import torchvision
+
 
 def plot_loss_curves(train_loss_per_epoch, val_loss_per_epoch, title="Loss vs. Epoch", fold_number = None, hyper_setnum = 0, model_type = "DINO"):
     """
@@ -28,6 +30,7 @@ def plot_loss_curves(train_loss_per_epoch, val_loss_per_epoch, title="Loss vs. E
     plt.legend()
     plt.savefig(title + "_" + model_type + "_" + str(hyper_setnum) + "_" + str(fold_number) + ".png", bbox_inches="tight", dpi=150)
     plt.show()
+
 
 def get_cosine_with_warmup_tail(optimizer, num_warmup_steps, num_training_steps, min_lr_factor=0.1, num_cycles=0.5):
     """
@@ -73,6 +76,7 @@ def replace_classifier(model):
                     return model, in_features
 
     raise ValueError("No known classifier layer found in this model.")
+
 
 def inspect_model_and_optimizer(model, optimizer, logger):
     logger.info("===== Trainable Parameters in Model =====")
@@ -156,6 +160,7 @@ class ResizeWithPadding:
 
         return img
 
+
 # save the validate image to target folders
 def save_validation_images(val_paths, dataset, cancer_path, normal_path):
     for i in range(len(val_paths)):
@@ -168,3 +173,88 @@ def save_validation_images(val_paths, dataset, cancer_path, normal_path):
                 utils.save_image(dataset[j][0],
                                  normal_path + val_paths[i].split('\\')[-1].split(".")[0] + "_val.png")
                 break
+
+
+def generate_save_train_images(train_paths, dataset, cancer_path, normal_path, num_variations_per_image_0, num_variations_per_image_1, transform_augmented, logger):
+    # original training images
+    train_origin_cancer_dataset = []
+    train_origin_normal_dataset = []
+    for i in range(len(train_paths)):
+        for j in range(len(dataset.samples)):
+            if dataset.samples[j][0] == train_paths[i] and dataset.samples[j][1] == 0:
+                train_origin_cancer_dataset.append(
+                    {'image': dataset[j][0], 'filename': train_paths[i].split('\\')[-1].split('.')[0]})
+                break
+            elif dataset.samples[j][0] == train_paths[i] and dataset.samples[j][1] == 1:
+                train_origin_normal_dataset.append(
+                    {'image': dataset[j][0], 'filename': train_paths[i].split('\\')[-1].split('.')[0]})
+                break
+
+    # Initialize an empty list to store the augmented images
+    augmented_images_class_0 = []
+    augmented_images_class_1 = []
+
+    # Image augmentation
+    for image in train_origin_cancer_dataset:
+        for i in range(num_variations_per_image_0):
+            augmented_images_class_0.append(
+                {'image': transform_augmented(image['image']), 'filename': image['filename']})
+
+    for image in train_origin_normal_dataset:
+        for i in range(num_variations_per_image_1):
+            augmented_images_class_1.append(
+                {'image': transform_augmented(image['image']), 'filename': image['filename']})
+
+    # save training dataset (original + augmentation)
+    if num_variations_per_image_0 > 0:
+        for i in range(len(augmented_images_class_0)):
+            utils.save_image(augmented_images_class_0[i]['image'],
+                             cancer_path + str(int(i / num_variations_per_image_0)) + "_" + str(
+                                 i % num_variations_per_image_0) + "_" + augmented_images_class_0[i][
+                                 'filename'] + "_aug.png")
+
+    if num_variations_per_image_1 > 0:
+        for i in range(len(augmented_images_class_1)):
+            utils.save_image(augmented_images_class_1[i]['image'],
+                             normal_path + str(int(i / num_variations_per_image_1)) + "_" + str(
+                                 i % num_variations_per_image_1) + "_" + augmented_images_class_1[i][
+                                 'filename'] + "_aug.png")
+
+    # save original images (after resize)
+    for i in range(len(train_origin_cancer_dataset)):
+        utils.save_image(train_origin_cancer_dataset[i]['image'],
+                         cancer_path + str(i) + "_" + train_origin_cancer_dataset[i][
+                             'filename'] + "_original.png")
+
+    for i in range(len(train_origin_normal_dataset)):
+        utils.save_image(train_origin_normal_dataset[i]['image'],
+                         normal_path + str(i) + "_" + train_origin_normal_dataset[i][
+                             'filename'] + "_original.png")
+
+    logger.info(
+        f"we have generate {len(augmented_images_class_0)} augmented cancer cell images and {len(augmented_images_class_1)} augmented normal cell images.")
+    logger.info(
+        f'Totally we have {len(train_origin_cancer_dataset) + len(augmented_images_class_0)} cancer cell images and {len(train_origin_normal_dataset) + len(augmented_images_class_1)} normal cell images for training')
+
+
+def read_data(test_path, validation_path, train_path, transform_whole_dataset):
+    # read test data
+    test_dataset = torchvision.datasets.ImageFolder(test_path, transform=transform_whole_dataset)
+    # read validation data
+    val_dataset = torchvision.datasets.ImageFolder(validation_path, transform=transform_whole_dataset)
+    # read train data
+    train_dataset = torchvision.datasets.ImageFolder(train_path, transform=transform_whole_dataset)
+
+    return test_dataset, val_dataset, train_dataset
+
+
+def save_whole_image(val_dataset, test_dataset, validation_whole_path, test_whole_path, transform_inverse):
+    # save test and validate image (un-shuffle, easy to find which one is misclassified)
+    for i in range(len(val_dataset)):
+        utils.save_image(transform_inverse(val_dataset[i][0]),
+                         validation_whole_path + str(i) + "_" + str(val_dataset[i][1]) + "_" +
+                         val_dataset.samples[i][0].split('\\')[-1].split('.')[0] + ".png")
+    for i in range(len(test_dataset)):
+        utils.save_image(transform_inverse(test_dataset[i][0]),
+                         test_whole_path + str(i) + "_" + str(test_dataset[i][1]) + "_" +
+                         test_dataset.samples[i][0].split('\\')[-1].split('.')[0] + ".png")
