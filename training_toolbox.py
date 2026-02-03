@@ -258,3 +258,25 @@ def save_whole_image(val_dataset, test_dataset, validation_whole_path, test_whol
         utils.save_image(transform_inverse(test_dataset[i][0]),
                          test_whole_path + str(i) + "_" + str(test_dataset[i][1]) + "_" +
                          test_dataset.samples[i][0].split('\\')[-1].split('.')[0] + ".png")
+
+
+def compute_mean_std_noblue(ds, channels):  # calculate the mean and std for each channel in the dataset
+    n_pixels = 0
+    mean = torch.zeros(channels)
+    mean_square = torch.zeros(channels)
+    for image in ds:
+        pixels = image.shape[1] * image.shape[2]
+        n_pixels += pixels
+        for channel in range(channels):
+            mean[channel] += image[channel, :, :].mean()
+            mean_square[channel] += (image[channel, :, :] ** 2).sum()
+    mean = mean / len(ds)
+    mean_square = mean_square / n_pixels
+    std = torch.sqrt(mean_square - mean ** 2)
+
+    mean_blue = torch.zeros(1)  # add the mean = 0 for blue channel
+    std_blue = torch.ones(1)  # std = 1, so the blue channel will not be altered by Normalization
+    mean = torch.cat([mean, mean_blue])
+    std = torch.cat([std, std_blue])
+
+    return mean, std
