@@ -7,6 +7,8 @@ import torch
 from torchvision.transforms.v2 import functional as F
 from torchvision import utils
 import torchvision
+from PIL import Image
+import numpy as np
 
 
 def plot_loss_curves(train_loss_per_epoch, val_loss_per_epoch, title="Loss vs. Epoch", fold_number = None, hyper_setnum = 0, model_type = "DINO"):
@@ -280,3 +282,22 @@ def compute_mean_std_noblue(ds, channels):  # calculate the mean and std for eac
     std = torch.cat([std, std_blue])
 
     return mean, std
+
+
+def resize_image(image, output_size):
+    # Check if image has valid size
+    if image.size[0] is None or image.size[1] is None:
+        print("Image size is invalid")
+        return None, None
+
+    # Check if image size exceeds maximum allowed
+    max_pixels = Image.MAX_IMAGE_PIXELS
+    if max_pixels is not None and image.size[0] * image.size[1] > max_pixels:
+        print("Image size exceeds maximum allowed")
+        return None, None
+
+    # Resize the image
+    resized_image = image.resize(output_size)
+
+    # Return resized image and original size
+    return np.array(resized_image), image.size
